@@ -26,6 +26,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          # 读取 gradle.properties 的键值；键不存在时返回空串而不是非 0 退出。
+          get_prop() {
+            local file="$1"
+            local key="$2"
+            sed -n "s/^${key}=//p" "$file" | head -n 1 | tr -d '\r'
+          }
+
           files=()
           for root in Fabric Forge NeoForge Neoforge; do
             [ -d "$root" ] || continue
@@ -68,12 +75,15 @@ jobs:
                 ;;
             esac
 
-            minecraft="$(grep -E '^minecraft_version=' "$file" | head -n 1 | cut -d '=' -f 2- | tr -d '\r')"
+            minecraft="$(get_prop "$file" minecraft_version)"
             if [ -z "$minecraft" ]; then
               minecraft='unknown'
             fi
 
-            archive_base="$(grep -E '^archives_base_name=' "$file" | head -n 1 | cut -d '=' -f 2- | tr -d '\r')"
+            archive_base="$(get_prop "$file" archives_base_name)"
+            if [ -z "$archive_base" ]; then
+              archive_base="$(get_prop "$file" mod_id)"
+            fi
             if [ -z "$archive_base" ]; then
               archive_base='artifact'
             fi
@@ -117,12 +127,19 @@ jobs:
         run: |
           set -euo pipefail
 
+          # 读取 gradle.properties 的键值；键不存在时返回空串而不是非 0 退出。
+          get_prop() {
+            local file="$1"
+            local key="$2"
+            sed -n "s/^${key}=//p" "$file" | head -n 1 | tr -d '\r'
+          }
+
           mapfile -t files < <(jq -r '.include[].project_dir + "/gradle.properties"' <<< '${{ steps.discover.outputs.matrix }}')
 
           versions=()
 
           for file in "${files[@]}"; do
-            version="$(grep -E '^mod_version=' "$file" | head -n 1 | cut -d '=' -f 2- | tr -d '\r')"
+            version="$(get_prop "$file" mod_version)"
             if [ -z "$version" ]; then
               echo "::error file=$file::mod_version not found"
               exit 1
