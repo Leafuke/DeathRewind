@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "com.leafuke.deathrewind.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "DeathScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

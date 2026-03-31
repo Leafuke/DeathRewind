@@ -1,0 +1,249 @@
+name: Release Maintained Builds
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    name: Discover maintained builds
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+      project_count: ${{ steps.discover.outputs.project_count }}
+      mod_version: ${{ steps.version.outputs.mod_version }}
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      release_name: ${{ steps.version.outputs.release_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Discover maintained projects
+        id: discover
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          files=()
+          for root in Fabric Forge NeoForge Neoforge; do
+            [ -d "$root" ] || continue
+            while IFS= read -r file; do
+              files+=("$file")
+            done < <(find "$root" -mindepth 2 -maxdepth 2 -type f -name 'gradle.properties' | sort)
+          done
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No maintained project gradle.properties files were found under Fabric/Forge/NeoForge."
+            exit 1
+          fi
+
+          include='[]'
+          project_count=0
+
+          for file in "${files[@]}"; do
+            project_dir="$(dirname "$file")"
+
+            # 只把可独立构建的项目加入发布矩阵。
+            if [ ! -f "$project_dir/gradlew" ]; then
+              continue
+            fi
+
+            root="${project_dir%%/*}"
+            root_lc="$(echo "$root" | tr '[:upper:]' '[:lower:]')"
+            case "$root_lc" in
+              fabric)
+                loader='fabric'
+                ;;
+              neoforge)
+                loader='neoforge'
+                ;;
+              forge)
+                loader='forge'
+                ;;
+              *)
+                echo "::warning file=$file::Unsupported root folder '$root'; skipping"
+                continue
+                ;;
+            esac
+
+            minecraft="$(grep -E '^minecraft_version=' "$file" | head -n 1 | cut -d '=' -f 2- | tr -d '\r')"
+            if [ -z "$minecraft" ]; then
+              minecraft='unknown'
+            fi
+
+            archive_base="$(grep -E '^archives_base_name=' "$file" | head -n 1 | cut -d '=' -f 2- | tr -d '\r')"
+            if [ -z "$archive_base" ]; then
+              archive_base='artifact'
+            fi
+
+            java='21'
+            if [ -f "$project_dir/build.gradle" ]; then
+              if grep -Eq 'JavaVersion\.VERSION_[0-9]+' "$project_dir/build.gradle"; then
+                java="$(grep -Eo 'JavaVersion\.VERSION_[0-9]+' "$project_dir/build.gradle" | head -n 1 | grep -Eo '[0-9]+')"
+              elif grep -Eq 'options\.release\s*=\s*[0-9]+' "$project_dir/build.gradle"; then
+                java="$(grep -Eo 'options\.release\s*=\s*[0-9]+' "$project_dir/build.gradle" | head -n 1 | grep -Eo '[0-9]+')"
+              fi
+            fi
+
+            id="${loader}-${minecraft}"
+            include="$(jq -c \
+              --arg id "$id" \
+              --arg loader "$loader" \
+              --arg minecraft "$minecraft" \
+              --arg java "$java" \
+              --arg project_dir "$project_dir" \
+              --arg archive_base "$archive_base" \
+              '. + [{id: $id, loader: $loader, minecraft: $minecraft, java: $java, project_dir: $project_dir, archive_base: $archive_base}]' \
+              <<< "$include")"
+
+            project_count=$((project_count + 1))
+          done
+
+          if [ "$project_count" -eq 0 ]; then
+            echo "::error::No buildable maintained project was discovered (missing per-project gradlew?)."
+            exit 1
+          fi
+
+          matrix="$(jq -c --argjson include "$include" '{include: $include}' <<< '{}')"
+
+          echo "project_count=$project_count" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve shared version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t files < <(jq -r '.include[].project_dir + "/gradle.properties"' <<< '${{ steps.discover.outputs.matrix }}')
+
+          versions=()
+
+          for file in "${files[@]}"; do
+            version="$(grep -E '^mod_version=' "$file" | head -n 1 | cut -d '=' -f 2- | tr -d '\r')"
+            if [ -z "$version" ]; then
+              echo "::error file=$file::mod_version not found"
+              exit 1
+            fi
+            versions+=("$version")
+          done
+
+          mapfile -t unique_versions < <(printf '%s\n' "${versions[@]}" | sort -u)
+
+          if [ "${#unique_versions[@]}" -ne 1 ]; then
+            echo "::error::All maintained projects must share the same mod_version."
+            for idx in "${!files[@]}"; do
+              echo "::error file=${files[$idx]}::Detected mod_version=${versions[$idx]}"
+            done
+            exit 1
+          fi
+
+          mod_version="${unique_versions[0]}"
+
+          echo "mod_version=$mod_version" >> "$GITHUB_OUTPUT"
+          echo "release_tag=v$mod_version" >> "$GITHUB_OUTPUT"
+          echo "release_name=Death Rewind v$mod_version" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.id }}
+    needs: discover
+    runs-on: ubuntu-24.04
+    if: ${{ needs.discover.outputs.project_count != '0' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        shell: bash
+        run: chmod +x "${{ matrix.project_dir }}/gradlew"
+
+      - name: Build mod
+        working-directory: ${{ matrix.project_dir }}
+        shell: bash
+        run: ./gradlew build --no-daemon
+
+      - name: Prepare release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          project_dir="${{ matrix.project_dir }}"
+          release_dir="$GITHUB_WORKSPACE/release-assets"
+          artifact_name="${{ matrix.archive_base }}-${{ matrix.loader }}-${{ matrix.minecraft }}-${{ needs.discover.outputs.mod_version }}.jar"
+
+          mkdir -p "$release_dir"
+
+          mapfile -t jars < <(find "$project_dir/build/libs" -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-dev.jar')
+
+          if [ "${#jars[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one releasable jar in $project_dir/build/libs, found ${#jars[@]}"
+            printf '%s\n' "${jars[@]}"
+            exit 1
+          fi
+
+          cp "${jars[0]}" "$release_dir/$artifact_name"
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.id }}
+          path: release-assets/*.jar
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs:
+      - discover
+      - build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download built assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.discover.outputs.release_tag }}
+          RELEASE_NAME: ${{ needs.discover.outputs.release_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists. Refreshing assets."
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_NAME" \
+              --target "$GITHUB_SHA"
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_NAME" \
+              --target "$GITHUB_SHA" \
+              --generate-notes
+          fi
+
+          gh release upload "$RELEASE_TAG" release-assets/*.jar --repo "$GITHUB_REPOSITORY" --clobber
