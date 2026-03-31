@@ -90,7 +90,9 @@ jobs:
 
             java='21'
             if [ -f "$project_dir/build.gradle" ]; then
-              if grep -Eq 'JavaVersion\.VERSION_[0-9]+' "$project_dir/build.gradle"; then
+              if grep -Eq 'JavaLanguageVersion\.of\([0-9]+\)' "$project_dir/build.gradle"; then
+                java="$(grep -Eo 'JavaLanguageVersion\.of\([0-9]+\)' "$project_dir/build.gradle" | head -n 1 | grep -Eo '[0-9]+')"
+              elif grep -Eq 'JavaVersion\.VERSION_[0-9]+' "$project_dir/build.gradle"; then
                 java="$(grep -Eo 'JavaVersion\.VERSION_[0-9]+' "$project_dir/build.gradle" | head -n 1 | grep -Eo '[0-9]+')"
               elif grep -Eq 'options\.release\s*=\s*[0-9]+' "$project_dir/build.gradle"; then
                 java="$(grep -Eo 'options\.release\s*=\s*[0-9]+' "$project_dir/build.gradle" | head -n 1 | grep -Eo '[0-9]+')"
