@@ -1,0 +1,16 @@
+{
+  "deathrewind.button.rewind": "Rewind To A Few Minutes Ago",
+  "deathrewind.message.handshake.open_failed": "§c[Death Rewind] Backend handshake failed. Death rewind is unavailable.",
+  "deathrewind.message.handshake.death_failed": "§c[Death Rewind] Handshake failed after death. Rewind button is disabled.",
+  "deathrewind.message.handshake.version_incompatible": "§c[Death Rewind] Mod version §f%s §cis lower than backend minimum §f%s§c.",
+  "deathrewind.message.handshake.main_version_incompatible": "§c[Death Rewind] Backend version §f%s §cis lower than mod minimum §f%s§c.",
+  "deathrewind.message.auto_backup.success": "§a[Death Rewind] Checkpoint created succeeded.",
+  "deathrewind.message.auto_backup.failed": "§c[Death Rewind] Checkpoint created failed.",
+  "deathrewind.message.restore.preparing": "§6[Death Rewind] Preparing rewind...",
+  "deathrewind.message.restore.kick": "§6[Death Rewind] §eRewinding world, you will rejoin automatically...",
+  "deathrewind.message.restore.rejoining": "§7[Death Rewind] Rewind complete, rejoining...",
+  "deathrewind.message.restore.success_overlay": "§a[Death Rewind] Rewind complete",
+  "deathrewind.message.restore.failed": "§c[Death Rewind] Rewind failed. Auto rejoin cancelled.",
+  "deathrewind.message.restore.request_sent": "§7[Death Rewind] Rewind request sent.",
+  "deathrewind.message.restore.request_failed": "§c[Death Rewind] Rewind request failed: %s"
+}
