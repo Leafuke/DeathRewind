@@ -64,7 +64,6 @@ minecraft {
     runs {
         client {
             workingDirectory project.file('run')
-            arg '-mixin.config=deathrewind.mixins.json'
 
             // Recommended logging data for a userdev environment
             // The markers can be added/remove as needed separated by commas.
@@ -90,7 +89,6 @@ minecraft {
 
         server {
             workingDirectory project.file('run')
-            arg '-mixin.config=deathrewind.mixins.json'
 
             property 'forge.logging.markers', 'REGISTRIES'
 
@@ -110,7 +108,6 @@ minecraft {
         // The gametest system is also enabled by default for other run configs under the /test command.
         gameTestServer {
             workingDirectory project.file('run')
-            arg '-mixin.config=deathrewind.mixins.json'
 
             property 'forge.logging.markers', 'REGISTRIES'
 
@@ -127,7 +124,6 @@ minecraft {
 
         data {
             workingDirectory project.file('run')
-            arg '-mixin.config=deathrewind.mixins.json'
 
             property 'forge.logging.markers', 'REGISTRIES'
 
@@ -215,8 +211,7 @@ jar {
                 "Implementation-Title"    : project.name,
                 "Implementation-Version"  : project.jar.archiveVersion,
                 "Implementation-Vendor"   : mod_authors,
-                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                "MixinConfigs"            : "deathrewind.mixins.json"
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
 }
