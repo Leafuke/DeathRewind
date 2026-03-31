@@ -1,7 +1,7 @@
-package com.leafuke.minebackup;
+package com.leafuke.deathrewind;
 
-import com.leafuke.minebackup.knotlink.OpenSocketQuerier;
-import com.leafuke.minebackup.restore.HotRestoreState;
+import com.leafuke.deathrewind.knotlink.OpenSocketQuerier;
+import com.leafuke.deathrewind.restore.HotRestoreState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -32,6 +32,10 @@ public final class ClientRejoinController {
     }
 
     public static void onClientTick(Minecraft client) {
+        if (client == null) {
+            return;
+        }
+
         if (waitingForRejoinCompletion) {
             if (client.level != null) {
                 waitingForRejoinCompletion = false;
@@ -39,7 +43,8 @@ public final class ClientRejoinController {
                 OpenSocketQuerier.query(QUERIER_APP_ID, QUERIER_SOCKET_ID, "REJOIN_RESULT success");
                 retryCount = 0;
                 worldToRejoin = null;
-                HotRestoreState.reset();
+                HotRestoreState.resetRestore();
+                DeathRewind.onClientRejoinSuccess();
                 return;
             }
 
@@ -123,7 +128,7 @@ public final class ClientRejoinController {
         retryCount = 0;
         disconnectWaitTicks = 0;
         rejoinCompletionTimeoutTicks = 0;
-        HotRestoreState.reset();
+        HotRestoreState.resetRestore();
     }
 
     private static void attemptAutoRejoin(Minecraft client, String levelId) {
@@ -133,7 +138,7 @@ public final class ClientRejoinController {
                 throw new IllegalArgumentException("Invalid level id for auto rejoin");
             }
 
-            Component notice = Component.translatable("minebackup.message.restore.rejoining");
+            Component notice = Component.translatable("deathrewind.message.restore.rejoining");
             client.setScreen(new SimpleMessageScreen(notice));
 
             if (client.level != null) {
@@ -142,12 +147,12 @@ public final class ClientRejoinController {
                 try {
                     client.level.disconnect();
                 } catch (Throwable t) {
-                    MineBackup.LOGGER.warn("Failed to disconnect current level before restore: {}", t.getMessage());
+                    DeathRewind.LOGGER.warn("Failed to disconnect current level before restore: {}", t.getMessage());
                 }
                 try {
                     client.disconnect(new SimpleMessageScreen(notice));
                 } catch (Throwable t) {
-                    MineBackup.LOGGER.warn("Failed to open disconnect flow before restore: {}", t.getMessage());
+                    DeathRewind.LOGGER.warn("Failed to open disconnect flow before restore: {}", t.getMessage());
                     client.setScreen(new SimpleMessageScreen(notice));
                 }
                 return;
@@ -155,7 +160,7 @@ public final class ClientRejoinController {
 
             startIntegratedServer(client, normalized);
         } catch (Exception e) {
-            MineBackup.LOGGER.error("Auto rejoin failed for world '{}': {}", levelId, e.getMessage(), e);
+            DeathRewind.LOGGER.error("Auto rejoin failed for world '{}': {}", levelId, e.getMessage(), e);
             handleRejoinFailure(client, levelId, e);
         }
     }
@@ -178,6 +183,7 @@ public final class ClientRejoinController {
             client.createWorldOpenFlows().openWorld(normalized, () -> {
                 waitingForRejoinCompletion = false;
                 OpenSocketQuerier.query(QUERIER_APP_ID, QUERIER_SOCKET_ID, "REJOIN_RESULT failure cancelled");
+                DeathRewind.onClientRejoinCancelled();
                 client.setScreen(new TitleScreen());
             });
         } catch (Exception e) {
@@ -188,7 +194,7 @@ public final class ClientRejoinController {
 
     private static void handleRejoinFailure(Minecraft client, String levelId, Exception error) {
         retryCount++;
-        MineBackup.LOGGER.warn("Automatic rejoin attempt {}/{} failed for {}: {}",
+        DeathRewind.LOGGER.warn("Automatic rejoin attempt {}/{} failed for {}: {}",
                 retryCount, MAX_RETRY_COUNT, levelId, error.getMessage());
 
         if (retryCount < MAX_RETRY_COUNT && sanitizeLevelId(levelId) != null) {
@@ -199,16 +205,17 @@ public final class ClientRejoinController {
 
         OpenSocketQuerier.query(QUERIER_APP_ID, QUERIER_SOCKET_ID, "REJOIN_RESULT failure max_retries_exceeded");
         resetRestoreState();
+        DeathRewind.onClientRejoinCancelled();
         try {
             if (client.player != null) {
-                client.player.sendSystemMessage(Component.translatable("minebackup.message.restore.failed"));
+                client.player.sendSystemMessage(Component.translatable("deathrewind.message.restore.failed"));
             }
         } catch (Exception ignored) {
         }
         try {
             client.setScreen(new SelectWorldScreen(new TitleScreen()));
         } catch (Exception ex) {
-            MineBackup.LOGGER.warn("Failed to open world selection screen: {}", ex.getMessage());
+            DeathRewind.LOGGER.warn("Failed to open world selection screen: {}", ex.getMessage());
             client.setScreen(new TitleScreen());
         }
     }

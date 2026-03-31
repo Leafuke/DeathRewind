@@ -1,4 +1,4 @@
-package com.leafuke.minebackup;
+package com.leafuke.deathrewind;
 
 import net.minecraft.server.MinecraftServer;
 
@@ -6,7 +6,7 @@ public final class LocalSaveCoordinator {
     private LocalSaveCoordinator() {
     }
 
-    public static boolean saveForLocalCommand(MinecraftServer server) {
+    public static boolean saveForLocalRestore(MinecraftServer server) {
         if (server == null) {
             return false;
         }
@@ -14,14 +14,14 @@ public final class LocalSaveCoordinator {
         try {
             server.getPlayerList().saveAll();
         } catch (Throwable t) {
-            MineBackup.LOGGER.warn("Failed to save player data before local save: {}", t.getMessage());
+            DeathRewind.LOGGER.warn("Failed to save player data before local save: {}", t.getMessage());
         }
 
         try {
             server.saveAllChunks(true, true, true);
             return true;
         } catch (Throwable t) {
-            MineBackup.LOGGER.warn("Failed to save world data for local command: {}", t.getMessage());
+            DeathRewind.LOGGER.warn("Failed to save world data before restore: {}", t.getMessage());
             return false;
         }
     }

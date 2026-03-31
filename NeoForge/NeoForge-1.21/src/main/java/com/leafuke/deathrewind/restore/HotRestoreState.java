@@ -1,7 +1,8 @@
-package com.leafuke.minebackup.restore;
+package com.leafuke.deathrewind.restore;
 
 public final class HotRestoreState {
-    private HotRestoreState() {}
+    private HotRestoreState() {
+    }
 
     public static volatile boolean waitingForServerStopAck = false;
     public static volatile String levelIdToRejoin = null;
@@ -12,7 +13,7 @@ public final class HotRestoreState {
     public static volatile boolean versionCompatible = true;
     public static volatile String requiredMinModVersion = null;
 
-    public static void reset() {
+    public static void resetRestore() {
         waitingForServerStopAck = false;
         levelIdToRejoin = null;
         isRestoring = false;

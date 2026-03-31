@@ -1,0 +1,19 @@
+{
+  "deathrewind.button.rewind": "回溯到若干分钟前",
+  "deathrewind.message.handshake.open_failed": "§c[Death Rewind] 无法连接主程序，死亡回溯功能将不可用。",
+  "deathrewind.message.handshake.death_failed": "§c[Death Rewind] 死亡后握手失败，回溯按钮已禁用。",
+  "deathrewind.message.handshake.version_incompatible": "§c[Death Rewind] 模组版本 §f%s §c低于主程序要求的最低版本 §f%s§c。",
+  "deathrewind.message.handshake.main_version_incompatible": "§c[Death Rewind] 主程序版本 §f%s §c低于模组要求的最低版本 §f%s§c。",
+  "deathrewind.message.auto_backup.success": "§a[Death Rewind] 回溯点创建成功。",
+  "deathrewind.message.auto_backup.failed": "§c[Death Rewind] 回溯点创建失败。",
+  "deathrewind.message.restore.preparing": "§6[Death Rewind] 正在准备回溯...",
+  "deathrewind.message.restore.kick": "§6[Death Rewind] §e正在回溯存档，稍后将自动重连...",
+  "deathrewind.message.restore.rejoining": "§7[Death Rewind] 回溯完成，正在重新进入...",
+  "deathrewind.message.restore.success_overlay": "§a[Death Rewind] 回溯成功",
+  "deathrewind.message.restore.failed": "§c[Death Rewind] 回溯失败，已取消自动重连。",
+  "deathrewind.message.restore.request_sent": "§7[Death Rewind] 已发送回溯请求。",
+  "deathrewind.message.restore.request_failed": "§c[Death Rewind] 回溯请求失败：%s",
+  "deathrewind.message.restore.unsupported_dedicated": "§6[Death Rewind] 专用服务器暂不支持模组内还原，请使用 MineBackupPlugin。",
+  "deathrewind.message.plugin_link_prefix": "§7插件说明与下载入口：",
+  "deathrewind.message.plugin_link_hover": "打开 MineBackup 插件页面"
+}

@@ -1,4 +1,4 @@
-package com.leafuke.minebackup;
+package com.leafuke.deathrewind;
 
 public final class FreezeWatchdog {
     public static final long TIMEOUT_MS = 3L * 60L * 1000L;
