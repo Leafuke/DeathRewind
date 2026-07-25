@@ -1,1 +1,7 @@
-{}
+{
+  "deathrewind.message.backup.created": "[Death Rewind] 回溯点创建成功。",
+  "deathrewind.message.backup.no_changes": "[Death Rewind] MineBackup 判定世界没有变化，将继续使用之前的回溯点。",
+  "deathrewind.message.backup.cancelled": "[Death Rewind] 回溯点创建已取消：%s",
+  "deathrewind.message.backup.rejected": "[Death Rewind] 回溯点请求被拒绝：%s",
+  "deathrewind.message.backup.failed": "[Death Rewind] 回溯点创建失败：%s"
+}

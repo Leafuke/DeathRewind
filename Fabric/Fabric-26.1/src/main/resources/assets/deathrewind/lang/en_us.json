@@ -1,1 +1,7 @@
-{}
+{
+  "deathrewind.message.backup.created": "[Death Rewind] Checkpoint created.",
+  "deathrewind.message.backup.no_changes": "[Death Rewind] MineBackup found no changes; the previous checkpoint remains available.",
+  "deathrewind.message.backup.cancelled": "[Death Rewind] Checkpoint creation was cancelled: %s",
+  "deathrewind.message.backup.rejected": "[Death Rewind] Checkpoint request was rejected: %s",
+  "deathrewind.message.backup.failed": "[Death Rewind] Checkpoint creation failed: %s"
+}
