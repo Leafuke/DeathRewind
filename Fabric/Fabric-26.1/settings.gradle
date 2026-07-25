@@ -1,0 +1,22 @@
+pluginManagement {
+	repositories {
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenCentral()
+		gradlePluginPortal()
+	}
+}
+
+rootProject.name = 'death-rewind-fabric-26.1'
+
+def mineBackupDir = providers.gradleProperty('minebackupDir')
+		.getOrElse('../../../Fabric/Fabric-26.1')
+
+includeBuild(mineBackupDir) {
+	name = 'minebackup-fabric-26.1'
+	dependencySubstitution {
+		substitute module('com.leafuke.minebackup:minebackup') using project(':')
+	}
+}

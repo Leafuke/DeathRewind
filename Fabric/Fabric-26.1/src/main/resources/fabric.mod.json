@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "deathrewind",
+  "version": "${version}",
+  "name": "Death Rewind",
+  "description": "Creates periodic MineBackup checkpoints and rewinds the latest backup from the death screen.",
+  "authors": [
+    "Leafuke"
+  ],
+  "contact": {
+    "homepage": "https://folderrewind.top/",
+    "sources": "https://github.com/Leafuke/DeathRewind"
+  },
+  "license": "MIT",
+  "icon": "assets/deathrewind/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.leafuke.deathrewind.DeathRewind"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "~26.1",
+    "java": ">=25",
+    "fabric-api": "*",
+    "minebackup": ">=3.1.0"
+  }
+}
