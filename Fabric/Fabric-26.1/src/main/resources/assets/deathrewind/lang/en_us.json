@@ -1,7 +1,15 @@
 {
+  "deathrewind.button.rewind": "Rewind To A Few Minutes Ago",
   "deathrewind.message.backup.created": "[Death Rewind] Checkpoint created.",
   "deathrewind.message.backup.no_changes": "[Death Rewind] MineBackup found no changes; the previous checkpoint remains available.",
   "deathrewind.message.backup.cancelled": "[Death Rewind] Checkpoint creation was cancelled: %s",
   "deathrewind.message.backup.rejected": "[Death Rewind] Checkpoint request was rejected: %s",
-  "deathrewind.message.backup.failed": "[Death Rewind] Checkpoint creation failed: %s"
+  "deathrewind.message.backup.failed": "[Death Rewind] Checkpoint creation failed: %s",
+  "deathrewind.message.restore.submitted": "[Death Rewind] Rewind request submitted.",
+  "deathrewind.message.restore.preparing": "[Death Rewind] Preparing to rewind the world...",
+  "deathrewind.message.restore.kick": "[Death Rewind] Rewinding the world. You will rejoin automatically...",
+  "deathrewind.message.restore.rejoining": "[Death Rewind] Rewind complete. Rejoining...",
+  "deathrewind.message.restore.succeeded": "[Death Rewind] Rewind complete.",
+  "deathrewind.message.restore.failed": "[Death Rewind] Rewind failed: %3$s",
+  "deathrewind.message.restore.request_failed": "[Death Rewind] Rewind request failed: %s"
 }

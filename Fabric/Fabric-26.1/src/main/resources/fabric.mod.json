@@ -17,8 +17,14 @@
   "entrypoints": {
     "main": [
       "com.leafuke.deathrewind.DeathRewind"
+    ],
+    "client": [
+      "com.leafuke.deathrewind.client.DeathRewindClient"
     ]
   },
+  "mixins": [
+    "deathrewind.client.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.18.4",
     "minecraft": "~26.1",

@@ -21,6 +21,7 @@ public final class DeathRewindSession implements AutoCloseable {
 
     private long elapsedTicks;
     private boolean backupInFlight;
+    private volatile boolean deathScreenPaused;
     private boolean closed;
 
     public DeathRewindSession(MinecraftServer server, DeathRewindConfig config) {
@@ -42,7 +43,7 @@ public final class DeathRewindSession implements AutoCloseable {
     }
 
     public void tick() {
-        if (closed || backupInFlight) {
+        if (closed || backupInFlight || deathScreenPaused) {
             return;
         }
         elapsedTicks++;
@@ -52,6 +53,18 @@ public final class DeathRewindSession implements AutoCloseable {
 
         elapsedTicks = 0L;
         submitBackup();
+    }
+
+    public void pauseForDeathScreen() {
+        deathScreenPaused = true;
+    }
+
+    public void resumeAfterDeathScreen() {
+        deathScreenPaused = false;
+    }
+
+    public boolean forceDeathRewind() {
+        return config.forceDeathRewind;
     }
 
     private void submitBackup() {

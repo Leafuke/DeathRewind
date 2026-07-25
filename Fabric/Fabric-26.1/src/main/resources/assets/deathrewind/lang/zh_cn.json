@@ -1,7 +1,15 @@
 {
+  "deathrewind.button.rewind": "回溯到若干分钟前",
   "deathrewind.message.backup.created": "[Death Rewind] 回溯点创建成功。",
   "deathrewind.message.backup.no_changes": "[Death Rewind] MineBackup 判定世界没有变化，将继续使用之前的回溯点。",
   "deathrewind.message.backup.cancelled": "[Death Rewind] 回溯点创建已取消：%s",
   "deathrewind.message.backup.rejected": "[Death Rewind] 回溯点请求被拒绝：%s",
-  "deathrewind.message.backup.failed": "[Death Rewind] 回溯点创建失败：%s"
+  "deathrewind.message.backup.failed": "[Death Rewind] 回溯点创建失败：%s",
+  "deathrewind.message.restore.submitted": "[Death Rewind] 已提交回溯请求。",
+  "deathrewind.message.restore.preparing": "[Death Rewind] 正在准备回溯世界……",
+  "deathrewind.message.restore.kick": "[Death Rewind] 正在回溯存档，稍后将自动重连……",
+  "deathrewind.message.restore.rejoining": "[Death Rewind] 回溯完成，正在重新进入……",
+  "deathrewind.message.restore.succeeded": "[Death Rewind] 回溯成功。",
+  "deathrewind.message.restore.failed": "[Death Rewind] 回溯失败：%3$s",
+  "deathrewind.message.restore.request_failed": "[Death Rewind] 回溯请求失败：%s"
 }

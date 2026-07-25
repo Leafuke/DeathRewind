@@ -7,7 +7,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 
 public final class DeathRewindRuntime {
-    private static DeathRewindSession session;
+    private static volatile DeathRewindSession session;
 
     private DeathRewindRuntime() {
     }
@@ -17,6 +17,32 @@ public final class DeathRewindRuntime {
         ServerLifecycleEvents.SERVER_STOPPING.register(DeathRewindRuntime::stop);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> session = null);
         ServerTickEvents.END_SERVER_TICK.register(DeathRewindRuntime::tick);
+    }
+
+    public static boolean hasIntegratedSession() {
+        return session != null;
+    }
+
+    public static boolean forceDeathRewind() {
+        var current = session;
+        return current != null && current.forceDeathRewind();
+    }
+
+    public static void deathScreenOpened() {
+        var current = session;
+        if (current != null) {
+            current.pauseForDeathScreen();
+        }
+    }
+
+    public static void deathScreenClosed(boolean restoreInFlight) {
+        if (restoreInFlight) {
+            return;
+        }
+        var current = session;
+        if (current != null) {
+            current.resumeAfterDeathScreen();
+        }
     }
 
     private static void start(MinecraftServer server) {
