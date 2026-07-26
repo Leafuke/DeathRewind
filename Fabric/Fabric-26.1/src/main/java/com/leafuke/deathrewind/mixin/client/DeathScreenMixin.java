@@ -43,11 +43,6 @@ public abstract class DeathScreenMixin extends Screen {
         deathrewind$applyButtonStates();
     }
 
-    @Inject(method = "removed", at = @At("TAIL"))
-    private void deathrewind$onRemoved(CallbackInfo callbackInfo) {
-        DeathScreenController.screenClosed();
-    }
-
     @Unique
     private void deathrewind$applyButtonStates() {
         if (deathrewind$rewindButton == null) {

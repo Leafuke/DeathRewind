@@ -13,6 +13,7 @@ import com.leafuke.minebackup.api.v2.RestoreResult;
 import com.leafuke.minebackup.api.v2.RuntimeEnvironment;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.network.chat.Component;
 
 import java.util.Map;
@@ -36,6 +37,7 @@ public final class DeathScreenController {
     private static boolean restoreInFlight;
     private static boolean failureUnlocked;
     private static boolean forceMode;
+    private static boolean screenOpen;
 
     private DeathScreenController() {
     }
@@ -44,18 +46,30 @@ public final class DeathScreenController {
         restoreInFlight = false;
         failureUnlocked = false;
         forceMode = false;
+        screenOpen = false;
     }
 
     public static void screenOpened() {
+        screenOpen = true;
         failureUnlocked = false;
         forceMode = DeathRewindRuntime.forceDeathRewind();
         DeathRewindRuntime.deathScreenOpened();
     }
 
     public static void screenClosed() {
+        if (!screenOpen) {
+            return;
+        }
+        screenOpen = false;
         DeathRewindRuntime.deathScreenClosed(restoreInFlight);
         forceMode = false;
         failureUnlocked = false;
+    }
+
+    public static void clientTick(Minecraft client) {
+        if (screenOpen && !(client.screen instanceof DeathScreen)) {
+            screenClosed();
+        }
     }
 
     public static boolean canRewind() {
