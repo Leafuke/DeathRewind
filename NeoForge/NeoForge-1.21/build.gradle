@@ -112,7 +112,8 @@ configurations {
 }
 
 dependencies {
-    // Example optional mod dependency with JEI
+    compileOnly "com.leafuke.minebackup:minebackup:${project.minebackup_version}"
+    runtimeOnly "com.leafuke.minebackup:minebackup:${project.minebackup_version}"
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
     // compileOnly "mezz.jei:jei-${mc_version}-neoforge-api:${jei_version}"
@@ -148,7 +149,8 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_license            : mod_license,
             mod_version            : mod_version,
             mod_authors            : mod_authors,
-            mod_description        : mod_description
+            mod_description        : mod_description,
+            minebackup_version     : minebackup_version
     ]
     inputs.properties replaceProperties
     filteringCharset = 'UTF-8'

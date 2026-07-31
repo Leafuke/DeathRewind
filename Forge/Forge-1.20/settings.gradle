@@ -12,3 +12,15 @@ pluginManagement {
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.5.0'
 }
+
+rootProject.name = 'death-rewind-forge-1.20'
+
+def mineBackupDir = providers.gradleProperty('minebackupDir')
+        .getOrElse('../../../Forge/Forge-1.20')
+
+includeBuild(mineBackupDir) {
+    name = 'minebackup-forge-1.20'
+    dependencySubstitution {
+        substitute module('com.leafuke.minebackup:minebackup') using project(':')
+    }
+}

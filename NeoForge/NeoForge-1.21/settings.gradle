@@ -7,3 +7,15 @@ pluginManagement {
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
+
+rootProject.name = 'death-rewind-neoforge-1.21'
+
+def mineBackupDir = providers.gradleProperty('minebackupDir')
+        .getOrElse('../../../Neoforge/NeoForge-1.21')
+
+includeBuild(mineBackupDir) {
+    name = 'minebackup-neoforge-1.21'
+    dependencySubstitution {
+        substitute module('com.leafuke.minebackup:minebackup') using project(':')
+    }
+}
