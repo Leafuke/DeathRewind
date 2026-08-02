@@ -3,6 +3,8 @@
 Death Rewind 是 MineBackup 的死亡回溯附属模组。它会在正常游玩期间定时请求
 MineBackup 创建检查点，并在单人游戏的死亡界面提供一键回溯入口。
 
+完整的安装、检查点、死亡界面回溯和配置说明见 [FolderRewind Minecraft 文档中的 Death Rewind 页面](https://folderrewind.top/docs/guides/minecraft/death-rewind)。
+
 2.0 起，Death Rewind 不再直接连接 FolderRewind，也不再复制 MineBackup 的热保存、
 自动保存冻结、恢复和重连实现。所有世界操作均由 MineBackup API v2 统一协调。
 
@@ -80,7 +82,7 @@ FolderRewind 中没有任何当前世界归档，死亡回溯会失败。
   "backup": {
     "mode": "incremental",
     "compressionMethod": "zstd",
-    "compressionLevel": 11
+    "compressionLevel": 6
   }
 }
 ```

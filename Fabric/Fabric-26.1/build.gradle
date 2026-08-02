@@ -22,11 +22,11 @@ dependencies {
 }
 
 processResources {
-	inputs.property "version", project.version
+	inputs.properties "version": project.version, "minebackup_version": project.minebackup_version
 	filteringCharset = 'UTF-8'
 
 	filesMatching("fabric.mod.json") {
-		expand "version": inputs.properties.version
+		expand "version": inputs.properties.version, "minebackup_version": inputs.properties.minebackup_version
 	}
 }
 

@@ -1,4 +1,4 @@
-name: Release Death Rewind Fabric 26.1
+name: Release Maintained Builds
 
 on:
   workflow_dispatch:
@@ -7,74 +7,241 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build Fabric 26.1
+  preflight:
+    name: Resolve shared version
     runs-on: ubuntu-24.04
     outputs:
       mod_version: ${{ steps.version.outputs.mod_version }}
       release_tag: ${{ steps.version.outputs.release_tag }}
       release_name: ${{ steps.version.outputs.release_name }}
-
     steps:
-      - name: Check out Death Rewind
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check out MineBackup-Mod API
+      - name: Read maintained project versions
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          files=(
+            "Fabric/Fabric-26.1/gradle.properties"
+            "NeoForge/NeoForge-1.21/gradle.properties"
+            "Forge/Forge-1.20/gradle.properties"
+          )
+
+          versions=()
+
+          for file in "${files[@]}"; do
+            version="$(grep -E '^mod_version=' "$file" | head -n 1 | cut -d '=' -f 2- | tr -d '\r')"
+            if [ -z "$version" ]; then
+              echo "::error file=$file::mod_version not found"
+              exit 1
+            fi
+            versions+=("$version")
+          done
+
+          mapfile -t unique_versions < <(printf '%s\n' "${versions[@]}" | sort -u)
+
+          if [ "${#unique_versions[@]}" -ne 1 ]; then
+            echo "::error::All maintained Death Rewind projects must share the same mod_version."
+            for idx in "${!files[@]}"; do
+              echo "::error file=${files[$idx]}::Detected mod_version=${versions[$idx]}"
+            done
+            exit 1
+          fi
+
+          mod_version="${unique_versions[0]}"
+
+          echo "mod_version=$mod_version" >> "$GITHUB_OUTPUT"
+          echo "release_tag=v$mod_version" >> "$GITHUB_OUTPUT"
+          echo "release_name=Death Rewind v$mod_version" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.id }}
+    needs: preflight
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: fabric-26.1
+            loader: fabric
+            minecraft: 26.1
+            java: '25'
+            project_dir: Fabric/Fabric-26.1
+            minebackup_dir: Fabric/Fabric-26.1
+            metadata_path: fabric.mod.json
+            main_class: com/leafuke/deathrewind/DeathRewind.class
+            mixin_config: deathrewind.client.mixins.json
+            artifact_prefix: deathrewind
+          - id: neoforge-1.21
+            loader: neoforge
+            minecraft: 1.21
+            java: '21'
+            project_dir: NeoForge/NeoForge-1.21
+            minebackup_dir: Neoforge/NeoForge-1.21
+            metadata_path: META-INF/neoforge.mods.toml
+            main_class: com/leafuke/deathrewind/DeathRewind.class
+            mixin_config: deathrewind.mixins.json
+            artifact_prefix: deathrewind
+          - id: forge-1.20
+            loader: forge
+            minecraft: 1.20
+            java: '17'
+            project_dir: Forge/Forge-1.20
+            minebackup_dir: Forge/Forge-1.20
+            metadata_path: META-INF/mods.toml
+            main_class: com/leafuke/deathrewind/DeathRewind.class
+            mixin_config: deathrewind.mixins.json
+            artifact_prefix: deathrewind
+
+    steps:
+      - name: Checkout Death Rewind
+        uses: actions/checkout@v4
+
+      - name: Checkout MineBackup-Mod main
         uses: actions/checkout@v4
         with:
           repository: Leafuke/MineBackup-Mod
+          ref: main
           path: MineBackup-Mod
 
       - name: Validate Gradle wrappers
         uses: gradle/actions/wrapper-validation@v4
 
-      - name: Set up Java 25
+      - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "25"
+          java-version: ${{ matrix.java }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Resolve release version
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-          mod_version="$(sed -n 's/^mod_version=//p' Fabric/Fabric-26.1/gradle.properties | head -n 1 | tr -d '\r')"
-          if [ -z "$mod_version" ]; then
-            echo "::error file=Fabric/Fabric-26.1/gradle.properties::mod_version not found"
-            exit 1
-          fi
-          echo "mod_version=$mod_version" >> "$GITHUB_OUTPUT"
-          echo "release_tag=v$mod_version" >> "$GITHUB_OUTPUT"
-          echo "release_name=Death Rewind v$mod_version" >> "$GITHUB_OUTPUT"
-
-      - name: Make wrapper executable
-        working-directory: Fabric/Fabric-26.1
+      - name: Make Gradle wrapper executable
+        working-directory: ${{ matrix.project_dir }}
         run: chmod +x gradlew
 
       - name: Composite clean build
-        working-directory: Fabric/Fabric-26.1
+        working-directory: ${{ matrix.project_dir }}
+        shell: bash
         run: >-
-          ./gradlew clean build --warning-mode all
-          -PminebackupDir="${{ github.workspace }}/MineBackup-Mod/Fabric/Fabric-26.1"
+          ./gradlew clean build --warning-mode all --no-daemon
+          -PminebackupDir="${{ github.workspace }}/MineBackup-Mod/${{ matrix.minebackup_dir }}"
+
+      - name: Verify release JAR
+        shell: bash
+        env:
+          PROJECT_DIR: ${{ matrix.project_dir }}
+          LOADER: ${{ matrix.loader }}
+          METADATA_PATH: ${{ matrix.metadata_path }}
+          MAIN_CLASS: ${{ matrix.main_class }}
+          MIXIN_CONFIG: ${{ matrix.mixin_config }}
+        run: |
+          set -euo pipefail
+
+          libs="$GITHUB_WORKSPACE/$PROJECT_DIR/build/libs"
+          mapfile -t jars < <(find "$libs" -maxdepth 1 -type f -name '*.jar' \
+            ! -name '*-sources.jar' ! -name '*-dev.jar' ! -name '*-javadoc.jar' | sort)
+
+          if [ "${#jars[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one releasable JAR in $libs, found ${#jars[@]}"
+            printf '%s\n' "${jars[@]}"
+            exit 1
+          fi
+
+          jar_file="${jars[0]}"
+          if ! unzip -Z1 "$jar_file" | grep -Fx "$MAIN_CLASS" >/dev/null; then
+            echo "::error::Main class $MAIN_CLASS is missing from $jar_file"
+            exit 1
+          fi
+
+          min_version="$(sed -n 's/^minebackup_version=//p' "$GITHUB_WORKSPACE/$PROJECT_DIR/gradle.properties" | head -n 1 | tr -d '\r')"
+          if [ -z "$min_version" ]; then
+            echo "::error::minebackup_version not found in $PROJECT_DIR/gradle.properties"
+            exit 1
+          fi
+
+          minebackup_source="$GITHUB_WORKSPACE/MineBackup-Mod/${{ matrix.minebackup_dir }}/gradle.properties"
+          source_version="$(sed -n 's/^mod_version=//p' "$minebackup_source" | head -n 1 | tr -d '\r')"
+          if [ -z "$source_version" ]; then
+            echo "::error::MineBackup source mod_version not found in $minebackup_source"
+            exit 1
+          fi
+          if [ "$(printf '%s\n' "$min_version" "$source_version" | sort -V | head -n 1)" != "$min_version" ]; then
+            echo "::error::MineBackup main source version $source_version is lower than addon minimum $min_version"
+            exit 1
+          fi
+
+          case "$LOADER" in
+            fabric)
+              manifest="$(unzip -p "$jar_file" "$METADATA_PATH")"
+              actual_dependency="$(jq -r '.depends.minebackup // empty' <<< "$manifest")"
+              expected_dependency=">=$min_version"
+              if [ "$actual_dependency" != "$expected_dependency" ]; then
+                echo "::error::Expected Fabric MineBackup dependency $expected_dependency, found $actual_dependency"
+                exit 1
+              fi
+              jq -e '.entrypoints.main | length > 0' <<< "$manifest" >/dev/null
+              mapfile -t mixins < <(jq -r '.mixins[]?' <<< "$manifest")
+              ;;
+            neoforge|forge)
+              metadata="$(unzip -p "$jar_file" "$METADATA_PATH")"
+              if ! grep -Fq "versionRange=\"[$min_version,)\"" <<< "$metadata"; then
+                echo "::error::MineBackup version range [$min_version,) is missing from $METADATA_PATH"
+                exit 1
+              fi
+              mapfile -t mixins < <(sed -n 's/.*config="\([^"]*\.mixins\.json\)".*/\1/p' <<< "$metadata")
+              if [ "${#mixins[@]}" -eq 0 ]; then
+                mixins=("$MIXIN_CONFIG")
+              fi
+              ;;
+            *)
+              echo "::error::Unsupported loader $LOADER"
+              exit 1
+              ;;
+          esac
+
+          if [ "${#mixins[@]}" -eq 0 ]; then
+            echo "::error::No Mixin configuration was declared in $METADATA_PATH"
+            exit 1
+          fi
+          if ! printf '%s\n' "${mixins[@]}" | grep -Fx "$MIXIN_CONFIG" >/dev/null; then
+            echo "::error::Expected Mixin configuration $MIXIN_CONFIG is not declared in $METADATA_PATH"
+            exit 1
+          fi
+          for mixin in "${mixins[@]}"; do
+            if ! unzip -Z1 "$jar_file" | grep -Fx "$mixin" >/dev/null; then
+              echo "::error::Mixin configuration $mixin is missing from $jar_file"
+              exit 1
+            fi
+          done
+
+          if unzip -Z1 "$jar_file" | grep '^com/leafuke/minebackup/' >/dev/null; then
+            echo "::error::Release JAR unexpectedly contains MineBackup implementation classes"
+            exit 1
+          fi
 
       - name: Prepare release asset
         shell: bash
         env:
-          MOD_VERSION: ${{ steps.version.outputs.mod_version }}
+          PROJECT_DIR: ${{ matrix.project_dir }}
+          ARTIFACT_PREFIX: ${{ matrix.artifact_prefix }}
+          LOADER: ${{ matrix.loader }}
+          MINECRAFT: ${{ matrix.minecraft }}
+          MOD_VERSION: ${{ needs.preflight.outputs.mod_version }}
         run: |
           set -euo pipefail
+
           release_dir="$GITHUB_WORKSPACE/release-assets"
-          artifact_name="deathrewind-fabric-26.1-${MOD_VERSION}.jar"
+          artifact_name="${ARTIFACT_PREFIX}-${LOADER}-${MINECRAFT}-${MOD_VERSION}.jar"
           mkdir -p "$release_dir"
 
-          mapfile -t jars < <(find Fabric/Fabric-26.1/build/libs -maxdepth 1 \
-            -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-dev.jar')
+          mapfile -t jars < <(find "$GITHUB_WORKSPACE/$PROJECT_DIR/build/libs" -maxdepth 1 -type f -name '*.jar' \
+            ! -name '*-sources.jar' ! -name '*-dev.jar' ! -name '*-javadoc.jar' | sort)
           if [ "${#jars[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one releasable jar, found ${#jars[@]}"
+            echo "::error::Expected exactly one releasable JAR, found ${#jars[@]}"
             printf '%s\n' "${jars[@]}"
             exit 1
           fi
@@ -84,33 +251,40 @@ jobs:
       - name: Upload release asset
         uses: actions/upload-artifact@v4
         with:
-          name: release-fabric-26.1
+          name: release-${{ matrix.id }}
           path: release-assets/*.jar
           if-no-files-found: error
 
   publish:
     name: Publish GitHub release
-    needs: build
+    needs:
+      - preflight
+      - build
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-
     steps:
-      - name: Download built asset
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download built assets
         uses: actions/download-artifact@v4
         with:
-          name: release-fabric-26.1
+          pattern: release-*
+          merge-multiple: true
           path: release-assets
 
       - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
-          RELEASE_NAME: ${{ needs.build.outputs.release_name }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          RELEASE_NAME: ${{ needs.preflight.outputs.release_name }}
         shell: bash
         run: |
           set -euo pipefail
+
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists. Refreshing assets."
             gh release edit "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$RELEASE_NAME" \
@@ -123,7 +297,6 @@ jobs:
               --generate-notes
           fi
 
-          gh release upload "$RELEASE_TAG" \
-            release-assets/*.jar \
+          gh release upload "$RELEASE_TAG" release-assets/*.jar \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
