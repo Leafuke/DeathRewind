@@ -10,8 +10,8 @@ MineBackup 创建检查点，并在单人游戏的死亡界面提供一键回溯
 
 ## 支持范围
 
-- Minecraft 26.1～26.1.2
-- Fabric Loader 0.18.4+
+- Minecraft 26.1～26.1.2、26.2
+- Fabric Loader 0.18.4+（26.1）或 0.19.3+（26.2）
 - Fabric API
 - MineBackup 3.1.0+
 - Java 25
@@ -24,7 +24,7 @@ Death Rewind 2.0 不支持专用服务器，也不能让加入 LAN 世界的普�
 
 1. 安装并配置 FolderRewind 及其 Minecraft 扩展。
 2. 安装 Fabric Loader、Fabric API 和 MineBackup 3.1.0 或更高版本。
-3. 将 Death Rewind Fabric-26.1 的 JAR 放入同一个 `mods` 目录。
+3. 将与游戏版本相符的 Death Rewind Fabric JAR 放入同一个 `mods` 目录。
 4. 进入单人世界。首次启动会生成 `config/death-rewind.json`。
 
 MineBackup 是必需依赖；缺少或版本低于 3.1.0 时，Fabric Loader 会拒绝加载 Death
@@ -104,11 +104,11 @@ FolderRewind 中没有任何当前世界归档，死亡回溯会失败。
 
 ## 开发构建
 
-Fabric-26.1 使用 Mojang Mapping、Fabric Loom 和 Java 25。默认仓库布局假设
+Fabric-26.1 与 Fabric-26.2 使用 Mojang Mapping、Fabric Loom 和 Java 25。默认仓库布局假设
 DeathRewind 与 MineBackup-Mod 位于当前项目中的既定相对位置：
 
 ```powershell
-cd Fabric/Fabric-26.1
+cd Fabric/Fabric-26.2
 ./gradlew.bat clean build --warning-mode all
 ```
 
@@ -116,10 +116,10 @@ cd Fabric/Fabric-26.1
 
 ```powershell
 ./gradlew.bat clean build --warning-mode all `
-  -PminebackupDir="D:\path\to\MineBackup-Mod\Fabric\Fabric-26.1"
+  -PminebackupDir="D:\path\to\MineBackup-Mod\Fabric\Fabric-26.2"
 ```
 
 生成的 Death Rewind JAR 不内置 MineBackup 实现；运行时必须同时安装 MineBackup。
 
 仓库中的旧 Fabric、Forge 和 NeoForge 项目仅作为历史实现保留。Death Rewind 2.0 的
-检查与发布流程只构建 `Fabric/Fabric-26.1`。
+检查与发布流程构建 `Fabric/Fabric-26.1` 和 `Fabric/Fabric-26.2`。
