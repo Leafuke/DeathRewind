@@ -1,17 +1,31 @@
 package com.leafuke.deathrewind.runtime;
 
 import com.leafuke.deathrewind.DeathRewind;
+import com.leafuke.deathrewind.command.DeathRewindCommand;
 import com.leafuke.deathrewind.config.DeathRewindConfigManager;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 public final class DeathRewindRuntime {
     private static volatile DeathRewindSession session;
+    private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(
+            task -> {
+                Thread thread = new Thread(task, "deathrewind-scheduler");
+                thread.setDaemon(true);
+                return thread;
+            });
 
     private DeathRewindRuntime() {
     }
@@ -46,6 +60,26 @@ public final class DeathRewindRuntime {
         }
     }
 
+    public static boolean pauseCheckpoints() {
+        var current = session;
+        return current != null && current.pause();
+    }
+
+    public static boolean resumeCheckpoints() {
+        var current = session;
+        return current != null && current.resume();
+    }
+
+    public static boolean setInterval(int minutes) {
+        var current = session;
+        return current != null && current.setInterval(minutes);
+    }
+
+    public static DeathRewindSession.Status getSessionStatus() {
+        var current = session;
+        return current != null ? current.getStatus() : null;
+    }
+
     private static final class EventHandler {
         @SubscribeEvent
         public void onServerStarting(ServerStartingEvent event) {
@@ -67,6 +101,30 @@ public final class DeathRewindRuntime {
             if (event.phase == TickEvent.Phase.END) {
                 tick(event.getServer());
             }
+        }
+
+        @SubscribeEvent
+        public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+            if (event.getEntity() instanceof ServerPlayer player) {
+                MinecraftServer server = player.getServer();
+                if (server != null) {
+                    // Delay 2 seconds to show after MineBackup's welcome message
+                    scheduler.schedule(
+                            () -> server.execute(() -> {
+                                var current = session;
+                                if (current != null) {
+                                    current.sendStatusWelcome(player);
+                                }
+                            }),
+                            2L,
+                            TimeUnit.SECONDS);
+                }
+            }
+        }
+
+        @SubscribeEvent
+        public void onRegisterCommands(RegisterCommandsEvent event) {
+            DeathRewindCommand.register(event.getDispatcher());
         }
     }
 
