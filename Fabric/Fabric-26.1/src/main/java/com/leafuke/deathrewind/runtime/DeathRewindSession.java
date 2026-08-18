@@ -6,7 +6,13 @@ import com.leafuke.deathrewind.backup.PeriodicBackupStrategy;
 import com.leafuke.deathrewind.config.DeathRewindConfig;
 import com.leafuke.minebackup.api.v2.BackupResult;
 import com.leafuke.minebackup.api.v2.OperationHandle;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.time.Duration;
 
@@ -17,11 +23,12 @@ public final class DeathRewindSession implements AutoCloseable {
     private final DeathRewindConfig config;
     private final PeriodicBackupStrategy strategy;
     private final BackupNotifier notifier;
-    private final long intervalTicks;
+    private long intervalTicks;
 
     private long elapsedTicks;
     private boolean backupInFlight;
     private volatile boolean deathScreenPaused;
+    private volatile boolean manuallyPaused;
     private boolean closed;
 
     public DeathRewindSession(MinecraftServer server, DeathRewindConfig config) {
@@ -43,7 +50,7 @@ public final class DeathRewindSession implements AutoCloseable {
     }
 
     public void tick() {
-        if (closed || backupInFlight || deathScreenPaused) {
+        if (closed || backupInFlight || deathScreenPaused || manuallyPaused) {
             return;
         }
         elapsedTicks++;
@@ -65,6 +72,84 @@ public final class DeathRewindSession implements AutoCloseable {
 
     public boolean forceDeathRewind() {
         return config.forceDeathRewind;
+    }
+
+    public boolean pause() {
+        if (manuallyPaused) {
+            return false;
+        }
+        manuallyPaused = true;
+        DeathRewind.LOGGER.info("Death Rewind checkpoints paused by command.");
+        return true;
+    }
+
+    public boolean resume() {
+        if (!manuallyPaused) {
+            return false;
+        }
+        manuallyPaused = false;
+        DeathRewind.LOGGER.info("Death Rewind checkpoints resumed by command.");
+        return true;
+    }
+
+    public boolean setInterval(int minutes) {
+        if (minutes < 1 || minutes > 1440) {
+            return false;
+        }
+        this.intervalTicks = minutes * TICKS_PER_MINUTE;
+        this.elapsedTicks = 0L;
+        DeathRewind.LOGGER.info("Death Rewind interval changed to {} minutes.", minutes);
+        return true;
+    }
+
+    public Status getStatus() {
+        int intervalMinutes = (int) (intervalTicks / TICKS_PER_MINUTE);
+        int elapsedMinutes = (int) (elapsedTicks / TICKS_PER_MINUTE);
+        int remainingMinutes = Math.max(0, intervalMinutes - elapsedMinutes);
+        return new Status(!manuallyPaused, intervalMinutes, elapsedMinutes, remainingMinutes);
+    }
+
+    public void sendStatusWelcome(ServerPlayer player) {
+        MutableComponent message;
+        if (manuallyPaused) {
+            // Paused state
+            message = Component.translatable("deathrewind.message.welcome.paused");
+            message.append(Component.literal(" "));
+            message.append(Component.translatable("deathrewind.message.welcome.button.resume")
+                    .withStyle(style -> style
+                            .withColor(ChatFormatting.GREEN)
+                            .withClickEvent(new ClickEvent.RunCommand("/dr resume"))
+                            .withHoverEvent(new HoverEvent.ShowText(
+                                    Component.translatable("deathrewind.message.welcome.button.resume.hover")))));
+        } else {
+            // Active state
+            int intervalMinutes = (int) (intervalTicks / TICKS_PER_MINUTE);
+            int remainingMinutes = Math.max(0, intervalMinutes - (int) (elapsedTicks / TICKS_PER_MINUTE));
+            message = Component.translatable(
+                    "deathrewind.message.welcome.enabled",
+                    intervalMinutes,
+                    remainingMinutes);
+            message.append(Component.literal(" "));
+            message.append(Component.translatable("deathrewind.message.welcome.button.pause")
+                    .withStyle(style -> style
+                            .withColor(ChatFormatting.YELLOW)
+                            .withClickEvent(new ClickEvent.RunCommand("/dr pause"))
+                            .withHoverEvent(new HoverEvent.ShowText(
+                                    Component.translatable("deathrewind.message.welcome.button.pause.hover")))));
+        }
+
+        message.append(Component.literal(" "));
+        message.append(Component.translatable("deathrewind.message.welcome.button.config")
+                .withStyle(style -> style
+                        .withColor(ChatFormatting.AQUA)
+                        .withClickEvent(new ClickEvent.SuggestCommand("/dr interval "))
+                        .withHoverEvent(new HoverEvent.ShowText(
+                                Component.translatable("deathrewind.message.welcome.button.config.hover")))));
+
+        player.sendSystemMessage(message);
+    }
+
+    public record Status(boolean enabled, int intervalMinutes, int elapsedMinutes, int remainingMinutes) {
     }
 
     private void submitBackup() {
