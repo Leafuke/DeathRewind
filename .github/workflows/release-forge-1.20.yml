@@ -1,0 +1,234 @@
+name: Release Forge 1.20 (Hotfix)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mod_version:
+        description: 'Mod version to release (e.g., 2.1.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Forge 1.20
+    runs-on: ubuntu-24.04
+    outputs:
+      artifact_name: ${{ steps.prepare.outputs.artifact_name }}
+    steps:
+      - name: Checkout Death Rewind
+        uses: actions/checkout@v4
+
+      - name: Checkout MineBackup-Mod main
+        uses: actions/checkout@v4
+        with:
+          repository: Leafuke/MineBackup-Mod
+          ref: main
+          path: MineBackup-Mod
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify version consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          actual_version="$(grep -E '^mod_version=' Forge/Forge-1.20/gradle.properties | head -n 1 | cut -d '=' -f 2- | tr -d '\r')"
+          expected_version="${{ inputs.mod_version }}"
+
+          if [ "$actual_version" != "$expected_version" ]; then
+            echo "::error::Version mismatch: gradle.properties has $actual_version but workflow input specified $expected_version"
+            exit 1
+          fi
+
+      - name: Make Gradle wrapper executable
+        working-directory: Forge/Forge-1.20
+        run: chmod +x gradlew
+
+      - name: Composite clean build
+        working-directory: Forge/Forge-1.20
+        shell: bash
+        run: >-
+          ./gradlew clean build --warning-mode all --no-daemon
+          -PminebackupDir="${{ github.workspace }}/MineBackup-Mod/Forge/Forge-1.20"
+
+      - name: Verify release JAR
+        shell: bash
+        env:
+          PROJECT_DIR: Forge/Forge-1.20
+          LOADER: forge
+          METADATA_PATH: META-INF/mods.toml
+          MAIN_CLASS: com/leafuke/deathrewind/DeathRewind.class
+          MIXIN_CONFIG: deathrewind.mixins.json
+        run: |
+          set -euo pipefail
+
+          libs="$GITHUB_WORKSPACE/$PROJECT_DIR/build/libs"
+          mapfile -t jars < <(find "$libs" -maxdepth 1 -type f -name '*.jar' \
+            ! -name '*-sources.jar' ! -name '*-dev.jar' ! -name '*-javadoc.jar' | sort)
+
+          if [ "${#jars[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one releasable JAR in $libs, found ${#jars[@]}"
+            printf '%s\n' "${jars[@]}"
+            exit 1
+          fi
+
+          jar_file="${jars[0]}"
+          echo "Found JAR: $jar_file"
+
+          if ! unzip -Z1 "$jar_file" | grep -Fx "$MAIN_CLASS" >/dev/null; then
+            echo "::error::Main class $MAIN_CLASS is missing from $jar_file"
+            exit 1
+          fi
+
+          min_version="$(sed -n 's/^minebackup_version=//p' "$GITHUB_WORKSPACE/$PROJECT_DIR/gradle.properties" | head -n 1 | tr -d '\r')"
+          if [ -z "$min_version" ]; then
+            echo "::error::minebackup_version not found in $PROJECT_DIR/gradle.properties"
+            exit 1
+          fi
+
+          minebackup_source="$GITHUB_WORKSPACE/MineBackup-Mod/Forge/Forge-1.20/gradle.properties"
+          source_version="$(sed -n 's/^mod_version=//p' "$minebackup_source" | head -n 1 | tr -d '\r')"
+          if [ -z "$source_version" ]; then
+            echo "::error::MineBackup source mod_version not found in $minebackup_source"
+            exit 1
+          fi
+          if [ "$(printf '%s\n' "$min_version" "$source_version" | sort -V | head -n 1)" != "$min_version" ]; then
+            echo "::error::MineBackup main source version $source_version is lower than addon minimum $min_version"
+            exit 1
+          fi
+
+          metadata="$(unzip -p "$jar_file" "$METADATA_PATH")"
+          if ! grep -Fq "versionRange=\"[$min_version,)\"" <<< "$metadata"; then
+            echo "::error::MineBackup version range [$min_version,) is missing from $METADATA_PATH"
+            exit 1
+          fi
+
+          mapfile -t mixins < <(sed -n 's/.*config="\([^"]*\.mixins\.json\)".*/\1/p' <<< "$metadata")
+          if [ "${#mixins[@]}" -eq 0 ]; then
+            mixins=("$MIXIN_CONFIG")
+          fi
+
+          if [ "${#mixins[@]}" -eq 0 ]; then
+            echo "::error::No Mixin configuration was declared in $METADATA_PATH"
+            exit 1
+          fi
+          if ! printf '%s\n' "${mixins[@]}" | grep -Fx "$MIXIN_CONFIG" >/dev/null; then
+            echo "::error::Expected Mixin configuration $MIXIN_CONFIG is not declared in $METADATA_PATH"
+            exit 1
+          fi
+
+          for mixin in "${mixins[@]}"; do
+            if ! unzip -Z1 "$jar_file" | grep -Fx "$mixin" >/dev/null; then
+              echo "::error::Mixin configuration $mixin is missing from $jar_file"
+              exit 1
+            fi
+
+            refmap="$(unzip -p "$jar_file" "$mixin" | jq -r '.refmap // empty')"
+            if [ -n "$refmap" ]; then
+              if ! unzip -Z1 "$jar_file" | grep -Fx "$refmap" >/dev/null; then
+                echo "::error::Mixin refmap $refmap is missing from $jar_file"
+                exit 1
+              fi
+              echo "✓ Verified refmap $refmap exists in JAR"
+            fi
+          done
+
+          if unzip -Z1 "$jar_file" | grep '^com/leafuke/minebackup/' >/dev/null; then
+            echo "::error::Release JAR unexpectedly contains MineBackup implementation classes"
+            exit 1
+          fi
+
+      - name: Prepare release asset
+        id: prepare
+        shell: bash
+        env:
+          PROJECT_DIR: Forge/Forge-1.20
+          MOD_VERSION: ${{ inputs.mod_version }}
+        run: |
+          set -euo pipefail
+
+          release_dir="$GITHUB_WORKSPACE/release-assets"
+          artifact_name="deathrewind-forge-1.20-${MOD_VERSION}.jar"
+          mkdir -p "$release_dir"
+
+          mapfile -t jars < <(find "$GITHUB_WORKSPACE/$PROJECT_DIR/build/libs" -maxdepth 1 -type f -name '*.jar' \
+            ! -name '*-sources.jar' ! -name '*-dev.jar' ! -name '*-javadoc.jar' | sort)
+          if [ "${#jars[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one releasable JAR, found ${#jars[@]}"
+            printf '%s\n' "${jars[@]}"
+            exit 1
+          fi
+
+          cp "${jars[0]}" "$release_dir/$artifact_name"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-forge-1.20
+          path: release-assets/*.jar
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download built assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-forge-1.20
+          path: release-assets
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v${{ inputs.mod_version }}
+          RELEASE_NAME: Death Rewind v${{ inputs.mod_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists. Uploading additional assets."
+            gh release upload "$RELEASE_TAG" release-assets/*.jar \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_NAME" \
+              --target "$GITHUB_SHA" \
+              --notes "**Forge 1.20 Hotfix Release**
+
+This is a targeted hotfix release for the Forge 1.20 loader only.
+
+## Changes
+- Fixed Mixin refmap generation and production remapping configuration
+- Added Mixin Annotation Processor to build configuration
+- Added \`minVersion\` declaration to Mixin configuration
+
+## Technical Details
+This release addresses a critical issue where Mixin reference maps were not being generated during the build process, causing runtime failures when the mod was loaded in production environments. The fix adds proper MixinGradle integration and annotation processor configuration to ensure refmaps are correctly generated and included in the release JAR.
+
+For other loaders (Fabric 26.1, Fabric 26.2, NeoForge 1.21), please use the maintained builds from the main release workflow." \
+              release-assets/*.jar
+          fi
