@@ -8,6 +8,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
@@ -41,23 +42,6 @@ public final class DeathRewindRuntime {
     public static boolean forceDeathRewind() {
         var current = session;
         return current != null && current.forceDeathRewind();
-    }
-
-    public static void deathScreenOpened() {
-        var current = session;
-        if (current != null) {
-            current.pauseForDeathScreen();
-        }
-    }
-
-    public static void deathScreenClosed(boolean restoreInFlight) {
-        if (restoreInFlight) {
-            return;
-        }
-        var current = session;
-        if (current != null) {
-            current.resumeAfterDeathScreen();
-        }
     }
 
     public static boolean pauseCheckpoints() {
@@ -100,6 +84,26 @@ public final class DeathRewindRuntime {
         public void onServerTick(TickEvent.ServerTickEvent event) {
             if (event.phase == TickEvent.Phase.END) {
                 tick(event.getServer());
+            }
+        }
+
+        @SubscribeEvent
+        public void onPlayerDeath(LivingDeathEvent event) {
+            if (event.getEntity() instanceof ServerPlayer player) {
+                var current = session;
+                if (current != null) {
+                    current.onPlayerDeath(player);
+                }
+            }
+        }
+
+        @SubscribeEvent
+        public void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+            if (event.getEntity() instanceof ServerPlayer player) {
+                var current = session;
+                if (current != null) {
+                    current.onPlayerRespawn(player);
+                }
             }
         }
 

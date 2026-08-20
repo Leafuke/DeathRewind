@@ -15,6 +15,9 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.time.Duration;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 
 public final class DeathRewindSession implements AutoCloseable {
     private static final long TICKS_PER_MINUTE = 60L * 20L;
@@ -27,7 +30,7 @@ public final class DeathRewindSession implements AutoCloseable {
 
     private long elapsedTicks;
     private boolean backupInFlight;
-    private volatile boolean deathScreenPaused;
+    private final Set<UUID> deathPausedPlayers = new HashSet<>();
     private volatile boolean manuallyPaused;
     private boolean closed;
 
@@ -50,7 +53,7 @@ public final class DeathRewindSession implements AutoCloseable {
     }
 
     public void tick() {
-        if (closed || backupInFlight || deathScreenPaused || manuallyPaused) {
+        if (closed || backupInFlight || !deathPausedPlayers.isEmpty() || manuallyPaused) {
             return;
         }
         elapsedTicks++;
@@ -62,12 +65,23 @@ public final class DeathRewindSession implements AutoCloseable {
         submitBackup();
     }
 
-    public void pauseForDeathScreen() {
-        deathScreenPaused = true;
+    public void onPlayerDeath(ServerPlayer player) {
+        if (closed) {
+            return;
+        }
+        if (deathPausedPlayers.add(player.getUUID())) {
+            DeathRewind.LOGGER.info(
+                    "Death Rewind checkpoints paused while player '{}' awaits respawn or rewind.",
+                    player.getGameProfile().getName());
+        }
     }
 
-    public void resumeAfterDeathScreen() {
-        deathScreenPaused = false;
+    public void onPlayerRespawn(ServerPlayer player) {
+        if (deathPausedPlayers.remove(player.getUUID())) {
+            DeathRewind.LOGGER.info(
+                    "Death Rewind checkpoints resumed after player '{}' respawned.",
+                    player.getGameProfile().getName());
+        }
     }
 
     public boolean forceDeathRewind() {
@@ -215,5 +229,6 @@ public final class DeathRewindSession implements AutoCloseable {
     @Override
     public void close() {
         closed = true;
+        deathPausedPlayers.clear();
     }
 }

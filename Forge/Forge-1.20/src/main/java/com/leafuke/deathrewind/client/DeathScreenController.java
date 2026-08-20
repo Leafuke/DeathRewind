@@ -13,9 +13,12 @@ import com.leafuke.minebackup.api.v2.RestoreResult;
 import com.leafuke.minebackup.api.v2.RuntimeEnvironment;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.network.chat.Component;
 
+import java.util.List;
 import java.util.Map;
 
 public final class DeathScreenController {
@@ -38,6 +41,13 @@ public final class DeathScreenController {
     private static boolean failureUnlocked;
     private static boolean forceMode;
     private static boolean screenOpen;
+    private static int deathScreenTicks;
+    private static DeathScreen currentScreen;
+    private static Button rewindButton;
+    private static List<AbstractWidget> vanillaWidgets = List.of();
+    private static boolean lockedVanillaButtons;
+
+    private static final int MIN_DEATH_SCREEN_TICKS = 20;
 
     private DeathScreenController() {
     }
@@ -47,29 +57,60 @@ public final class DeathScreenController {
         failureUnlocked = false;
         forceMode = false;
         screenOpen = false;
+        deathScreenTicks = 0;
+        currentScreen = null;
+        rewindButton = null;
+        vanillaWidgets = List.of();
+        lockedVanillaButtons = false;
     }
 
-    public static void screenOpened() {
+    public static void open(
+            DeathScreen screen,
+            List<AbstractWidget> vanillaWidgets,
+            Button rewindButton) {
+        boolean sameScreen = screenOpen && currentScreen == screen;
         screenOpen = true;
-        failureUnlocked = false;
+        currentScreen = screen;
+        DeathScreenController.vanillaWidgets = List.copyOf(vanillaWidgets);
+        DeathScreenController.rewindButton = rewindButton;
+        if (!sameScreen) {
+            deathScreenTicks = 0;
+            failureUnlocked = false;
+        }
         forceMode = DeathRewindRuntime.forceDeathRewind();
-        DeathRewindRuntime.deathScreenOpened();
+        lockedVanillaButtons = false;
+        applyButtonStates();
     }
 
-    public static void screenClosed() {
-        if (!screenOpen) {
+    public static void close(DeathScreen screen) {
+        if (!screenOpen || currentScreen != screen) {
             return;
         }
         screenOpen = false;
-        DeathRewindRuntime.deathScreenClosed(restoreInFlight);
+        currentScreen = null;
+        rewindButton = null;
+        vanillaWidgets = List.of();
+        deathScreenTicks = 0;
         forceMode = false;
         failureUnlocked = false;
+        lockedVanillaButtons = false;
     }
 
     public static void clientTick(Minecraft client) {
-        if (screenOpen && !(client.screen instanceof DeathScreen)) {
-            screenClosed();
+        if (!(client.screen instanceof DeathScreen screen)) {
+            if (screenOpen && currentScreen != null) {
+                close(currentScreen);
+            }
+            return;
         }
+        if (!screenOpen || currentScreen != screen) {
+            return;
+        }
+
+        if (deathScreenTicks < MIN_DEATH_SCREEN_TICKS) {
+            deathScreenTicks++;
+        }
+        applyButtonStates();
     }
 
     public static boolean canRewind() {
@@ -92,7 +133,7 @@ public final class DeathScreenController {
     }
 
     public static void requestRewind() {
-        if (!canRewind()) {
+        if (!screenOpen || deathScreenTicks < MIN_DEATH_SCREEN_TICKS || !canRewind()) {
             return;
         }
 
@@ -114,8 +155,8 @@ public final class DeathScreenController {
                     "deathrewind.message.restore.submitted").withStyle(ChatFormatting.YELLOW));
         }
 
+        var client = Minecraft.getInstance();
         handle.completion().whenComplete((result, throwable) -> {
-            var client = Minecraft.getInstance();
             client.execute(() -> finish(result, throwable));
         });
     }
@@ -130,11 +171,13 @@ public final class DeathScreenController {
             failureUnlocked = true;
             DeathRewind.LOGGER.error("Death Rewind restore completed exceptionally.", throwable);
             sendFailure(safeMessage(throwable));
+            applyButtonStates();
             return;
         }
         if (result == null) {
             failureUnlocked = true;
             sendFailure("unknown");
+            applyButtonStates();
             return;
         }
 
@@ -158,6 +201,32 @@ public final class DeathScreenController {
                         failure);
                 sendFailure(failure);
             }
+        }
+        applyButtonStates();
+    }
+
+    private static void applyButtonStates() {
+        if (!screenOpen || rewindButton == null) {
+            return;
+        }
+
+        boolean canRewind = canRewind();
+        rewindButton.active = canRewind && deathScreenTicks >= MIN_DEATH_SCREEN_TICKS;
+
+        boolean lockVanillaButtons = shouldLockVanillaButtons(canRewind);
+        if (lockVanillaButtons) {
+            for (AbstractWidget widget : vanillaWidgets) {
+                widget.active = false;
+            }
+            lockedVanillaButtons = true;
+            return;
+        }
+
+        if (lockedVanillaButtons) {
+            for (AbstractWidget widget : vanillaWidgets) {
+                widget.active = deathScreenTicks >= MIN_DEATH_SCREEN_TICKS;
+            }
+            lockedVanillaButtons = false;
         }
     }
 
